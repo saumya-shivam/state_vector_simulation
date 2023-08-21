@@ -1,0 +1,1 @@
+Python implementation of state vector simulation of a quantum state, with capabilities such as application of single gates, brick-work random circuit, mid circuit measurements, and computing properties to the state such as entanglement entropy.
