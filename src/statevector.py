@@ -198,7 +198,7 @@ class qstate:
             bin_full=['0']*self.nqubits
             
             for j,m in enumerate(meas_qubits):
-                bin_full[m]=meas_str[j]#str(meas_ind[j])
+                bin_full[m]=meas_str[j]
                 
             for j,m in enumerate(traced_qubits):
                 bin_full[m]=str(bin_i[j])
