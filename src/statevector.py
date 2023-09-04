@@ -1,6 +1,7 @@
 import numpy as np
 from itertools import product
 from scipy.stats import unitary_group
+import random
 
 X=np.array([[0,1],[1,0]],dtype=complex)
 Y=np.array([[0,-1j],[1j,0]],dtype=complex)
@@ -12,7 +13,7 @@ class qstate:
         self.nqubits=n
         
         if(random==True):
-            self.arr=np.random.rand(2**n)+1j*np.random.rand(2**n)
+            self.arr=np.random.normal(size=2**n)+1j*np.random.normal(size=2**n)
             self.arr=self.arr/np.linalg.norm(self.arr)
             
         elif(random==False and len(arr)==0):
@@ -26,112 +27,95 @@ class qstate:
         self.norm=np.linalg.norm(self.arr)
     
     
-    def apply_1gate(self,gate,i=0,inplace=True):
+    def apply_1gate(self,gate,i=0,inplace=True,p1=None):
 
         #apply gate on qubit i (0 indexed)
         
-        Ntot=2**self.nqubits # total dimesnions of the Hilbert space
-
-        arr=self.arr.copy()
+        if(inplace==False):
+            arr=self.arr.copy()
+        
         gate=np.array(gate,dtype=complex)
-        
-        # say if m ranges from 0 to Ntot-1, mp ranges from 0 to Ntot/2 -1 since ith position bit string is fixed
 
+        # if noisy, apply a gate randomly chosen from X,Y,Z with the same probability
+        if p1 is not None:
+            if(np.random.rand()<p1):
+                gate=gate.dot(random.choice([X,Y,Z]))
+
+        
         L=self.nqubits
+
+        # reshape into (2,2,2,..) array so that contractions are easier
+        self.arr=np.reshape(self.arr,tuple([2]*L))
         
-        alpha,beta=0,1 # two states which can be generalized for qudits later
+        #contract gate with state
+        self.arr=np.einsum(gate,[L,i],self.arr,range(L),[j for j in range(i)]+[L]+[j for j in range(i+1,L)])
         
-        for mp in range(Ntot//2):
-
-            # suppose mp = m1'+m2', where m1'=b1x2**(L-2)+b2x2**(L-3)+... +b_{i}x2**(L-i-1), m2'=b_{i+2}2**(L-i-2)+...+b_{L-1}2**(1)+b_{L}q**(0)
-            # then by definition m1' = (2**(L-i-1))*mp//2**(L-i-1)
-            # and m2'=mp-m1'
-            m1p=(2**(L-i-1))*(mp//(2**(L-i-1)))
-            m2p=mp-m1p
-
-            # now the two states which will be modified are ones which have alpha and beta at ith position
-
-            alpha_ind=2*m1p+alpha*(2**(L-i-1))+m2p
-
-            beta_ind=2*m1p+beta*(2**(L-i-1))+m2p
-
-            # modifying the state at the corresponding indices
-
-            arr[alpha_ind]=self.arr[alpha_ind]*gate[0,0]+gate[0,1]*self.arr[beta_ind]
-            arr[beta_ind]=self.arr[beta_ind]*gate[1,1]+gate[1,0]*self.arr[alpha_ind]
-
+        # revert to original shape
+        self.arr=np.reshape(self.arr,2**self.nqubits)
+        
         if(inplace==True):
-            self.arr=arr
             self.norm=np.linalg.norm(self.arr)
             return None
         else:
-            return arr
+            new=self.arr
+            self.arr=arr
+            return new
     
-    def apply_2gate(self,gate,i=0,j=1,inplace=True):
+    def apply_2gate(self,gate,i=0,j=1,inplace=True,p2=None):
+        
         
         if(self.nqubits<2):
-            return print("Number of qubits smaller than 2!")
-                
-        # pick four levels at the two sites, for qubits by default 0 and 1
-        a1,b1= 0,1
-        a2,b2= 0,1
+            raise ValueError("Number of qubits smaller than 2!")
+            
+        if(inplace==False):
+            arr=self.arr.copy()
 
-
-        Ntot=2**self.nqubits # total dimesnions of the Hilbert space
-
-        arr=self.arr.copy()
-        gate=np.array(gate,dtype=complex)
-
-        # say if m ranges from 0 to Ntot-1, mp ranges from 0 to Ntot/q**2 -1 since ith and jth position dit string is fixed
-        # important that i<j!
-
+        # if input indices not ordered correctly, reorder
         if(i>j):
             tmp=i
             i=j
             j=tmp
 
-        q=2 # for qubits
-        L=self.nqubits 
+        # if noisy, apply a gate randomly chosen from two qubit Pauli Products with the same probability
+        if p2 is not None:
+            if(np.random.rand()<p2):
+                error_1=random.choice([np.eye(2),X,Y,Z])
+
+                if(np.linalg.norm(error_1-np.eye(2))==0): # if first qubit error is I, exclude I as a possible choice in 2nd qubit error
+                    error_2 = random.choice([X,Y,Z])
+                else:
+                    error_2 = random.choice([np.eye(2),X,Y,Z])
+
+                gate=gate.dot(np.kron(error_1,error_2))
+
         
-        for mp in range(Ntot//(q**2)):
+        L=self.nqubits 
 
-            # suppose mp = m1'+m2'+m3', 
-            # where m1'=b1q**(L-3)+b2q**(L-4)+... +b_{i-1}q**(L-i-1), m2'=b_{i+1}q**(L-i-2)+ ...+b_{j-1}q**(L-j)
-            # ,m3'=b_{j+1}q**(L-j-1).....+b_{L-1}q**(1)+b_{L}q**(0)
-            # then by definition m1' = (q**(L-i-1))*mp//q**(L-i-1)
-            # and m2'=(q**(L-j))*mp//q**(L-j)-m1'
-            # and m3'= m'-m1'-m2'
+        # reshape state to (2,2,2...)
+        self.arr=np.reshape(self.arr,tuple([2]*L))
 
-            m1p=(q**(L-i-2))*(mp//(q**(L-i-2)))
-            m2p=(q**(L-j-1))*(mp//(q**(L-j-1)))-m1p
-            m3p=mp-m1p-m2p
+        # reshape two qubit gate to (2,2,2,2) (C ordering)
+        gate=np.array(gate,dtype=complex)
+        gate=np.reshape(gate,tuple([2]*4))
 
-            # now the four states which will be modified are ones which have alpha and beta at ith position
+        # contract gate with state
+        self.arr=np.einsum(gate,[L,L+1,i,j],self.arr,range(L),[k for k in range(i)]+[L]+[k for k in range(i+1,j)]+[L+1]+[k for k in range(j+1,L)])
 
-            a1a2_ind=(q**2)*m1p+a1*(q**(L-i-1))+q*m2p+a2*(q**(L-j-1))+m3p
-            a1b2_ind=(q**2)*m1p+a1*(q**(L-i-1))+q*m2p+b2*(q**(L-j-1))+m3p            
-            b1a2_ind=(q**2)*m1p+b1*(q**(L-i-1))+q*m2p+a2*(q**(L-j-1))+m3p
-            b1b2_ind=(q**2)*m1p+b1*(q**(L-i-1))+q*m2p+b2*(q**(L-j-1))+m3p
-
-            
-            psi_short=np.array([self.arr[a1a2_ind],self.arr[a1b2_ind],self.arr[b1a2_ind],self.arr[b1b2_ind]])
-            
-            arr[a1a2_ind]=gate[0,:].dot(psi_short)
-            arr[a1b2_ind]=gate[1,:].dot(psi_short)
-            arr[b1a2_ind]=gate[2,:].dot(psi_short)
-            arr[b1b2_ind]=gate[3,:].dot(psi_short)        
+        # restore shape
+        self.arr=np.reshape(self.arr,2**self.nqubits)
 
         if(inplace==True):
-            self.arr=arr
             self.norm=np.linalg.norm(self.arr)
             return None
         else:
-            return arr
+            new=self.arr
+            self.arr=arr
+            return new
 
         
         
         
-    def measure(self,basis_list=['Z'],only_subsystem=False):
+    def measure(self,basis_list=['Z'],only_subsystem=False,inplace=True):
         
 
         if(basis_list==['I']*self.nqubits): #if no qubits are being measured
@@ -146,6 +130,9 @@ class qstate:
         # if basis element 'I', qubit is NOT measured
         meas_qubits=[]
 
+        if(inplace==False):
+            pre_arr=self.arr[:]
+        
         for i in range(self.nqubits):
             
             if(basis_list[i]=='X'):
@@ -218,7 +205,11 @@ class qstate:
             self.nqubits=self.nqubits-n_meas
                              
         self.arr=psi_b/np.linalg.norm(psi_b) # normalize                    
-        
+
+        if(inplace==False):
+            new=self.arr
+            self.arr=pre_arr
+                    
         return meas_qubits,meas_str
     
     
@@ -285,3 +276,7 @@ class qstate:
                 self.measure(meas_basis)
 
         return None
+
+    def overlap(self,psi):
+
+        return np.conjugate(np.transpose(psi.arr)).dot(self.arr)
