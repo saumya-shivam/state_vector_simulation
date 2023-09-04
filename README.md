@@ -5,10 +5,10 @@ Created with an emphasis on subsystem measurements. Capabilities include applica
 
 ## Examples
 
-Currently includes an [example](examples/measurement_induced_transition.ipynb) illustrating the competing effects of evolution under a random quantum circuit and measurements.
+Currently includes an [example](examples/measurement_induced_transition.ipynb) illustrating the competing effects of evolution under a random quantum circuit and measurements, and an [example](examples/random_circuit_sampling.ipynb) exploring random circuit sampling in brick-work circuits, both with and without noise.
 
 
 ## Updates coming up :
 
-More examples, simulating noise and generalizing everything for qudits.
+More examples, ~~simulating noise~~ and generalizing everything for qudits.
 
